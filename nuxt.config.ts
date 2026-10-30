@@ -27,6 +27,12 @@ export default defineNuxtConfig({
     '/materials/**': { headers: { 'cache-control': 'private, no-store' } },
     '/inventory': { headers: { 'cache-control': 'private, no-store' } },
     '/warehouses': { headers: { 'cache-control': 'private, no-store' } },
+    '/receipts': { headers: { 'cache-control': 'private, no-store' } },
+    '/issues': { headers: { 'cache-control': 'private, no-store' } },
+    '/returns': { headers: { 'cache-control': 'private, no-store' } },
+    '/transactions': { headers: { 'cache-control': 'private, no-store' } },
+    '/boms': { headers: { 'cache-control': 'private, no-store' } },
+    '/production': { headers: { 'cache-control': 'private, no-store' } },
     '/api/**': { headers: { 'cache-control': 'private, no-store' } },
   },
 })

@@ -101,6 +101,7 @@ export interface StockBalance {
   location_id: string
   on_hand: number
   reserved: number
+  held: number
   updated_at: string
 }
 
@@ -132,6 +133,7 @@ export interface InventoryRow {
   location_name: string
   on_hand: number
   reserved: number
+  held: number
   available: number
   unavailable: number
   material_available: number
@@ -150,6 +152,7 @@ export interface MaterialStockSummary {
   is_active: boolean
   on_hand: number
   reserved: number
+  held: number
   available: number
   unavailable: number
   lot_count: number

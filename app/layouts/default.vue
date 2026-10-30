@@ -12,6 +12,12 @@ const pageTitle = computed(() => {
   if (route.path === '/materials') return '원료 관리'
   if (route.path === '/inventory') return '재고 조회'
   if (route.path === '/warehouses') return '창고 · 보관위치'
+  if (route.path === '/receipts') return '입고 관리'
+  if (route.path === '/issues') return '불출 관리'
+  if (route.path === '/returns') return '반납 관리'
+  if (route.path === '/transactions') return '시험번호별 원장'
+  if (route.path === '/boms') return 'BOM 관리'
+  if (route.path === '/production') return '생산일정 · 예정 불출'
   return '대시보드'
 })
 

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { DashboardResponse } from '#shared/types/dashboard'
 import { roleLabels } from '#shared/utils/permissions'
+import type { Paginated } from '#shared/types/inventory'
+import { transactionLabels, type StockLedgerRow } from '#shared/types/transactions'
 
 definePageMeta({ middleware: 'auth' })
 useSeoMeta({ title: '대시보드 · Warehouse AI' })
@@ -9,6 +11,16 @@ const { user, fetchWithSession, refreshSession } = useAuth()
 const refreshing = ref(false)
 const updatedLabel = ref('방금 확인')
 const { data: dashboard, error: dashboardError, refresh } = await useAsyncData('dashboard', () => fetchWithSession<DashboardResponse>('/api/dashboard'))
+const { data: recentTransactions, error: recentError, refresh: refreshRecent } = await useAsyncData('dashboard-recent-transactions', async () => {
+  const first = await fetchWithSession<Paginated<StockLedgerRow>>('/api/transactions?pageSize=5')
+  const lastPage = Math.ceil(first.total / first.pageSize)
+  const latest = lastPage > 1 ? await fetchWithSession<Paginated<StockLedgerRow>>(`/api/transactions?pageSize=5&page=${lastPage}`) : first
+  if (lastPage > 1 && latest.items.length < 5) {
+    const previous = lastPage === 2 ? first : await fetchWithSession<Paginated<StockLedgerRow>>(`/api/transactions?pageSize=5&page=${lastPage - 1}`)
+    return [...previous.items, ...latest.items].slice(-5).reverse()
+  }
+  return [...latest.items].reverse()
+})
 
 const stats = [
   { label: '등록 원료', icon: 'i-lucide-flask-conical', unit: '개', description: '대시보드 통계 연결 예정', tone: 'blue' as const },
@@ -32,6 +44,7 @@ async function refreshDashboard() {
       return
     }
     await refresh()
+    await refreshRecent()
     updatedLabel.value = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date()) + ' 확인'
   }
   catch { await navigateTo('/login', { replace: true }) }
@@ -43,7 +56,7 @@ async function refreshDashboard() {
   <div class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <div class="mb-2 flex items-center gap-2"><p class="text-[10px] font-semibold tracking-[.18em] text-slate-400">WORKSPACE OVERVIEW</p><span class="rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-blue-600">PHASE 2</span></div>
+        <div class="mb-2 flex items-center gap-2"><p class="text-[10px] font-semibold tracking-[.18em] text-slate-400">WORKSPACE OVERVIEW</p></div>
         <h1 class="text-[27px] font-bold tracking-tight text-slate-900">대시보드</h1>
         <p class="mt-2 text-xs text-slate-500">{{ user?.displayName }}님, 안녕하세요. 원료·자재 관리 워크스페이스입니다.</p>
       </div>
@@ -75,20 +88,20 @@ async function refreshDashboard() {
       <section class="overflow-hidden rounded-xl border border-slate-200/80 bg-white" aria-labelledby="recent-transactions-title">
         <div class="flex items-center justify-between gap-3 px-5 py-5">
           <div><h2 id="recent-transactions-title" class="text-sm font-semibold text-slate-800">최근 입출고 내역</h2><p class="mt-1.5 text-[11px] text-slate-400">원료의 이동 내역을 확인하는 공간입니다.</p></div>
-          <UBadge color="neutral" variant="subtle" size="sm">준비 중</UBadge>
+          <UButton to="/transactions" color="neutral" variant="ghost" size="sm">전체 원장</UButton>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full min-w-[520px] text-left text-[11px]">
-            <caption class="sr-only">입출고 기능은 Phase 3에서 제공되며 현재 거래 데이터는 없습니다.</caption>
+            <caption class="sr-only">최근 입고·불출·반납 거래</caption>
             <thead class="border-y border-slate-100 bg-slate-50/80 text-slate-400"><tr><th class="px-5 py-3 font-medium">처리일시</th><th class="px-3 py-3 font-medium">구분</th><th class="px-3 py-3 font-medium">원료명 / LOT</th><th class="px-3 py-3 font-medium">수량</th><th class="px-5 py-3 font-medium">작업자</th></tr></thead>
-            <tbody><tr><td colspan="5" class="px-5 py-12 text-center">
+            <tbody><tr v-for="row in recentTransactions" :key="row.id" class="border-b border-slate-100"><td class="px-5 py-4">{{ inventoryDate(row.occurred_on) }}</td><td class="px-3 py-4">{{ transactionLabels[row.kind] }}</td><td class="px-3 py-4">{{ row.material_name }}<p class="mt-1 text-slate-400">{{ row.test_number_snapshot || row.lot_number_snapshot }}</p></td><td class="px-3 py-4 tabular-nums">{{ inventoryQuantity(row.quantity) }} {{ row.base_unit }}</td><td class="px-5 py-4">{{ row.actor_name }}</td></tr><tr v-if="!recentTransactions?.length"><td colspan="5" class="px-5 py-12 text-center">
               <span class="mx-auto flex size-14 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 text-slate-300"><UIcon name="i-lucide-package-open" class="size-7" /></span>
-              <p class="mt-4 text-xs font-medium text-slate-600">입출고 기록을 위한 공간이 준비되었습니다</p>
-              <p class="mt-2 text-[11px] leading-5 text-slate-400">입고·불출·반납 기능이 연결되면<br>이곳에서 최근 거래를 확인할 수 있습니다.</p>
+              <p class="mt-4 text-xs font-medium text-slate-600">{{ recentError ? '거래 내역을 불러오지 못했습니다' : '아직 등록된 입출고 내역이 없습니다' }}</p>
+              <p class="mt-2 text-[11px] leading-5 text-slate-400">{{ recentError ? '새로고침하여 다시 확인해 주세요.' : '입고·불출·반납 처리 후 여기에서 확인할 수 있습니다.' }}</p>
             </td></tr></tbody>
           </table>
         </div>
-        <div class="flex items-center gap-1.5 border-t border-slate-100 px-5 py-3 text-[10px] text-slate-400"><UIcon name="i-lucide-info" class="size-3" />현재 화면은 집계 데이터가 없는 기본 화면입니다.</div>
+        <div class="flex items-center gap-1.5 border-t border-slate-100 px-5 py-3 text-[10px] text-slate-400"><UIcon name="i-lucide-info" class="size-3" />시험번호별 원장에서 처리 수량과 잔량을 확인할 수 있습니다.</div>
       </section>
 
       <aside class="space-y-4" aria-label="워크스페이스 정보">

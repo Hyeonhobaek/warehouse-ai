@@ -19,7 +19,7 @@ function save() {
 <template>
   <UModal v-model:open="open" :title="batch ? '입고건 · 품질정보 수정' : '입고건 정보 등록'" description="입고건은 같은 제조 LOT 안에서도 입고일과 시험정보를 구분하는 기준입니다." :dismissible="!busy" :ui="{ content: 'sm:max-w-2xl' }">
     <template #body><form id="batch-editor" class="grid gap-4 sm:grid-cols-2" @submit.prevent="save">
-      <UAlert color="info" variant="soft" title="입고건 정보를 저장해도 재고 수량은 증가하지 않습니다." description="실제 수량 입고와 재고 변경은 Phase 3 입출고 기능에서 처리합니다." class="sm:col-span-2" />
+      <UAlert color="info" variant="soft" title="이 화면에서는 입고건의 기준정보와 품질정보를 관리합니다." description="실제 입고 수량은 입고 관리에서 등록하세요. 이 화면의 저장으로 재고 수량이 증가하지 않습니다." class="sm:col-span-2" />
       <UAlert v-if="error" color="error" variant="soft" :title="error" class="sm:col-span-2" />
       <UFormField label="입고건 식별번호" required><UInput v-model="form.receipt_reference" required maxlength="100" placeholder="예: RC-2026-001" class="w-full" :disabled="busy" /></UFormField>
       <UFormField label="입고일" required><UInput v-model="form.received_on" type="date" required min="1900-01-01" max="2199-12-31" class="w-full" :disabled="busy" /></UFormField>

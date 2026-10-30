@@ -1,0 +1,65 @@
+<script setup lang="ts">
+import type { Material, Paginated } from '#shared/types/inventory'
+import { transactionLabels, transactionKinds, type StockLedgerRow, type TransactionBatch, type TransactionResult } from '#shared/types/transactions'
+
+definePageMeta({ middleware: 'auth' })
+useSeoMeta({ title: '시험번호별 원장 · Warehouse AI' })
+const { fetchWithSession } = useAuth()
+const { route, filters, page, queryString, apply, reset, setPage } = useInventoryQuery({ q: '', material_id: '', batch_id: '', type: '', from: '', to: '' })
+const selectedMaterial = ref<Material | null>(null)
+const selectedBatch = ref<TransactionBatch | null>(null)
+const kind = computed({ get: () => filters.type || 'all', set: (value: string) => { filters.type = value === 'all' ? '' : value } })
+const kindOptions = [{ value: 'all', label: '전체 구분' }, ...transactionKinds.map(value => ({ value, label: transactionLabels[value] }))]
+watch(selectedMaterial, (value, previous) => {
+  filters.material_id = value?.id ?? ''
+  if (value?.id !== previous?.id) { selectedBatch.value = null; filters.batch_id = '' }
+})
+watch(selectedBatch, value => { filters.batch_id = value?.batch_id ?? '' })
+const { data: ledger, error, status, refresh: refreshLedger } = await useAsyncData('transaction-ledger', () => fetchWithSession<Paginated<StockLedgerRow>>(`/api/transactions?${queryString()}`), { watch: [() => route.fullPath] })
+const { data: currentBatch, error: batchSummaryError, refresh: refreshBatch } = await useAsyncData('transaction-current-batch', async () => {
+  if (typeof route.query.batch_id !== 'string' || !route.query.batch_id) return null
+  const response = await fetchWithSession<Paginated<TransactionBatch>>(`/api/transactions/batches?${new URLSearchParams({ batch_id: route.query.batch_id })}`)
+  return response.items[0] ?? null
+}, { watch: [() => route.fullPath] })
+async function refresh() { await Promise.all([refreshLedger(), refreshBatch()]) }
+async function clearFilters() { selectedMaterial.value = null; selectedBatch.value = null; await reset() }
+async function clearBatch() { selectedBatch.value = null; filters.batch_id = ''; await apply() }
+const detailOpen = ref(false)
+const detailBusy = ref(false)
+const detailError = ref<string | null>(null)
+const detail = ref<TransactionResult | null>(null)
+async function showDetail(id: string) {
+  detail.value = null; detailError.value = null; detailBusy.value = true; detailOpen.value = true
+  try { detail.value = await fetchWithSession<TransactionResult>(`/api/transactions/${encodeURIComponent(id)}`) }
+  catch (cause) { detailError.value = inventoryErrorMessage(cause) }
+  finally { detailBusy.value = false }
+}
+function kindColor(value: StockLedgerRow['kind']) { return ({ RECEIPT: 'success', ISSUE: 'primary', RETURN: 'warning', RETURN_RELEASE: 'neutral' } as const)[value] }
+function processedTime(value: string) { return new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) }
+</script>
+
+<template>
+  <div class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-[10px] font-semibold tracking-[.18em] text-slate-400">MATERIAL LEDGER</p><h1 class="mt-2 text-[27px] font-bold text-slate-900">시험번호별 원장</h1><p class="mt-2 text-xs text-slate-500">원료와 시험번호별 입고·불출·반납 내역을 날짜순으로 확인합니다.</p></div><UButton color="neutral" variant="outline" icon="i-lucide-refresh-cw" :loading="status === 'pending'" class="bg-white" @click="refresh()">새로고침</UButton></div>
+    <form class="space-y-4 rounded-xl border border-slate-200 bg-white p-5" @submit.prevent="apply">
+      <div class="grid gap-4 lg:grid-cols-2">
+        <UFormField label="원료"><TransactionsLookup v-model="selectedMaterial" endpoint="/api/materials" label="원장 원료" :placeholder="filters.material_id ? '원료가 지정되어 있습니다. 클릭하여 변경' : '전체 원료'" :option-label="(row: Material) => `${row.code} · ${row.name}`" /></UFormField>
+        <UFormField label="입고건 · 시험번호"><TransactionsLookup v-model="selectedBatch" :endpoint="`/api/transactions/batches${filters.material_id ? `?material_id=${filters.material_id}` : ''}`" label="입고건 · 시험번호" :placeholder="filters.batch_id ? '입고건이 지정되어 있습니다. 클릭하여 변경' : '전체 입고건 · 시험번호 검색'" :option-key="(row: TransactionBatch) => row.batch_id" :option-label="(row: TransactionBatch) => `${row.test_number || '시험번호 없음'} · ${row.material_name}`" :option-detail="(row: TransactionBatch) => `${inventoryDate(row.received_on)} 입고 · LOT ${row.lot_number} · ${row.receipt_reference}`" /></UFormField>
+      </div>
+      <div class="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-5"><UFormField label="검색" class="sm:col-span-2"><UInput v-model="filters.q" placeholder="원료, 현재·이전 시험번호, LOT, 생산 제조번호" icon="i-lucide-search" class="w-full" /></UFormField><UFormField label="구분"><USelect v-model="kind" :items="kindOptions" class="w-full" /></UFormField><UFormField label="시작일"><UInput v-model="filters.from" type="date" min="1900-01-01" :max="filters.to || '2199-12-31'" class="w-full" /></UFormField><UFormField label="종료일"><UInput v-model="filters.to" type="date" :min="filters.from || '1900-01-01'" max="2199-12-31" class="w-full" /></UFormField></div>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"><p class="text-[11px] text-slate-500">현재·과거 시험번호로 같은 입고건을 찾을 수 있습니다. 표에는 거래 당시의 시험번호를 표시합니다.</p><div class="flex gap-2"><UButton type="submit" icon="i-lucide-search">조회</UButton><UButton color="neutral" variant="ghost" @click="clearFilters">초기화</UButton></div></div>
+      <div v-if="filters.batch_id" class="flex items-center gap-2 text-xs text-blue-600"><UIcon name="i-lucide-filter" class="size-3" />선택한 입고건 원장<UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" aria-label="입고건 지정 해제" @click="clearBatch" /></div>
+    </form>
+    <div v-if="currentBatch" class="grid gap-3 sm:grid-cols-3"><div class="rounded-xl border border-slate-200 bg-white p-5"><p class="text-xs text-slate-500">현재고 · {{ currentBatch.test_number || currentBatch.receipt_reference }}</p><p class="mt-2 text-xl font-semibold text-slate-800">{{ inventoryQuantity(currentBatch.on_hand) }} <span class="text-xs font-normal">{{ currentBatch.base_unit }}</span></p></div><div class="rounded-xl border border-slate-200 bg-white p-5"><p class="text-xs text-slate-500">반납 보류</p><p class="mt-2 text-xl font-semibold text-amber-700">{{ inventoryQuantity(currentBatch.held) }} <span class="text-xs font-normal">{{ currentBatch.base_unit }}</span></p></div><div class="rounded-xl border border-slate-200 bg-white p-5"><p class="text-xs text-slate-500">가용재고</p><p class="mt-2 text-xl font-semibold text-blue-600">{{ inventoryQuantity(currentBatch.available) }} <span class="text-xs font-normal">{{ currentBatch.base_unit }}</span></p></div></div>
+    <UAlert v-if="batchSummaryError" color="warning" variant="soft" title="선택한 입고건의 현재 재고를 불러오지 못했습니다. 새로고침해 주세요." />
+    <UAlert v-if="error" color="error" variant="soft" title="입출고 원장을 불러오지 못했습니다" :description="inventoryErrorMessage(error)"><template #actions><UButton color="error" variant="outline" @click="refresh()">다시 시도</UButton></template></UAlert>
+    <section class="overflow-hidden rounded-xl border border-slate-200 bg-white" :aria-busy="status === 'pending'">
+      <div class="flex items-center justify-between gap-3 p-5"><div><h2 class="text-sm font-semibold text-slate-800">입출고 원장</h2><p class="mt-1 text-[11px] text-slate-400">오래된 거래부터 표시 · 잔량은 해당 입고건·보관위치의 처리 후 수량입니다.</p></div><p v-if="!error" class="text-xs text-slate-400">{{ (ledger?.total ?? 0).toLocaleString('ko-KR') }}건</p></div>
+      <p v-if="status === 'pending'" role="status" class="px-5 pb-3 text-xs text-blue-600">원장을 불러오는 중입니다…</p>
+      <div class="overflow-x-auto"><table class="w-full min-w-[1500px] text-left text-xs"><caption class="sr-only">시험번호별 날짜순 입출고 내역과 거래 후 잔량</caption><thead class="border-y border-slate-100 bg-slate-50 text-slate-500"><tr><th class="px-5 py-3 font-medium">거래일 / 처리일시</th><th class="px-3 py-3 font-medium">구분</th><th class="px-3 py-3 font-medium">원료 / LOT</th><th class="px-3 py-3 font-medium">거래 당시 시험번호</th><th class="px-3 py-3 font-medium">창고 / 위치</th><th class="px-3 py-3 text-right font-medium">처리 수량</th><th class="px-3 py-3 text-right font-medium">처리 전 잔량</th><th class="px-3 py-3 text-right font-medium">처리 후 잔량</th><th class="px-3 py-3 text-right font-medium">반납 보류</th><th class="px-3 py-3 font-medium">생산 품목 / 제조번호</th><th class="px-3 py-3 font-medium">사유 / 담당자</th><th class="px-5 py-3 font-medium">상세</th></tr></thead><tbody class="divide-y divide-slate-100"><tr v-for="row in error ? [] : ledger?.items" :key="row.id" class="hover:bg-slate-50/50"><td class="whitespace-nowrap px-5 py-4 font-medium">{{ inventoryDate(row.occurred_on) }}<p class="mt-1 text-[10px] font-normal text-slate-400">{{ processedTime(row.created_at) }}</p></td><td class="px-3 py-4"><UBadge :color="kindColor(row.kind)" variant="subtle" size="sm">{{ transactionLabels[row.kind] }}</UBadge><p v-if="row.kind === 'ISSUE' && row.issue_purpose === 'CLEANING'" class="mt-1 text-[10px] text-blue-600">세척 · 18L씩 배정</p></td><td class="px-3 py-4"><NuxtLink :to="`/materials/${row.material_id}`" class="font-medium text-blue-600 hover:underline">{{ row.material_name }}</NuxtLink><p class="mt-1 text-slate-400">{{ row.material_code }} · {{ row.lot_number_snapshot }}</p></td><td class="px-3 py-4 font-medium">{{ row.test_number_snapshot || '없음' }}<p v-if="row.current_test_number !== row.test_number_snapshot" class="mt-1 text-[10px] font-normal text-slate-400">현재: {{ row.current_test_number || '없음' }}</p></td><td class="px-3 py-4">{{ row.warehouse_code_snapshot }}<p class="mt-1 text-slate-400">{{ row.location_code_snapshot }}</p></td><td class="whitespace-nowrap px-3 py-4 text-right font-semibold tabular-nums" :class="row.kind === 'ISSUE' ? 'text-blue-700' : row.kind === 'RETURN_RELEASE' ? 'text-slate-500' : 'text-emerald-700'">{{ row.kind === 'ISSUE' ? '−' : row.kind === 'RETURN_RELEASE' ? '' : '+' }}{{ inventoryQuantity(row.quantity) }} {{ row.base_unit }}<p v-if="row.kind === 'RETURN_RELEASE'" class="mt-1 text-[10px] font-normal">현재고 변동 없음</p></td><td class="whitespace-nowrap px-3 py-4 text-right tabular-nums">{{ inventoryQuantity(row.on_hand_before) }} {{ row.base_unit }}</td><td class="whitespace-nowrap px-3 py-4 text-right font-medium tabular-nums">{{ inventoryQuantity(row.on_hand_after) }} {{ row.base_unit }}</td><td class="whitespace-nowrap px-3 py-4 text-right tabular-nums text-amber-700">{{ inventoryQuantity(row.held_after) }} {{ row.base_unit }}</td><td class="px-3 py-4">{{ row.production_item || '—' }}<p class="mt-1 text-slate-400">{{ row.production_batch || '—' }}</p></td><td class="max-w-56 whitespace-pre-wrap break-words px-3 py-4">{{ row.reason }}<p class="mt-1 text-slate-400">{{ row.actor_name || '—' }}</p></td><td class="px-5 py-4"><UButton v-if="row.operation_id" color="neutral" variant="ghost" size="xs" @click="showDetail(row.operation_id)">상세</UButton></td></tr><tr v-if="error"><td colspan="12" class="px-5 py-12 text-center text-rose-600">조회에 실패했습니다. 위 오류를 확인하고 다시 시도해 주세요.</td></tr><tr v-if="!error && !ledger?.items.length && status !== 'pending'"><td colspan="12" class="px-5 py-16 text-center text-slate-400">조건에 맞는 입출고 내역이 없습니다.</td></tr></tbody></table></div>
+      <InventoryPagination v-if="!error" :total="ledger?.total ?? 0" :page="page" :page-size="ledger?.pageSize ?? 20" :busy="status === 'pending'" @change="setPage" />
+    </section>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 text-xs leading-6 text-slate-500">이 원장에는 입출고 기능을 통해 등록한 거래부터 기록됩니다. 엑셀에서 이관한 기존 잔량의 과거 사용 내역은 포함되지 않습니다. 현재 재고는 <NuxtLink :to="`/inventory${filters.material_id ? `?material_id=${filters.material_id}` : ''}`" class="text-blue-600 underline">재고 조회</NuxtLink>에서 확인할 수 있습니다.</div>
+    <UModal v-model:open="detailOpen" title="거래 상세" description="총 입력 사용량과 재고 단위 환산량, 입고건별 차감을 확인합니다." :ui="{ content: 'sm:max-w-4xl' }"><template #body><p v-if="detailBusy" role="status" class="py-10 text-center text-sm text-slate-400">거래를 불러오는 중입니다…</p><UAlert v-else-if="detailError" color="error" variant="soft" :title="detailError" /><template v-else-if="detail"><dl class="mb-5 grid gap-3 text-xs sm:grid-cols-2"><div><dt class="text-slate-400">담당자</dt><dd class="mt-1 text-slate-700">{{ detail.operation.actor_name }}</dd></div><div><dt class="text-slate-400">전체 불출 · 입고 요청의 입력 수량</dt><dd class="mt-1 text-slate-700">{{ inventoryQuantity(detail.operation.input_quantity) }} {{ detail.operation.input_unit }}<span class="ml-2 text-slate-400">→ {{ inventoryQuantity(detail.operation.quantity) }} {{ detail.operation.base_unit }}</span></dd></div><div><dt class="text-slate-400">처리 사유</dt><dd class="mt-1 whitespace-pre-wrap text-slate-700">{{ detail.operation.reason }}</dd></div><div><dt class="text-slate-400">비고</dt><dd class="mt-1 whitespace-pre-wrap text-slate-700">{{ detail.operation.notes || '—' }}</dd></div></dl><TransactionsResult :result="detail" :title="transactionLabels[detail.operation.kind]" /></template></template></UModal>
+  </div>
+</template>

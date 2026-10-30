@@ -6,7 +6,11 @@ import { pathToFileURL } from 'node:url'
 import { createSupabaseFixture } from './supabase.mjs'
 
 const tables = ['materials', 'material_lots', 'stock_batches', 'stock_batch_quality_history',
-  'warehouses', 'storage_locations', 'stock_balances', 'inventory_rows', 'material_stock_summary']
+  'warehouses', 'storage_locations', 'stock_balances', 'inventory_rows', 'material_stock_summary',
+  'stock_operations', 'stock_transaction_lines', 'stock_ledger_rows', 'stock_batch_options',
+  'bom_recipes', 'production_schedules', 'stock_issue_plans', 'schedule_rows', 'issue_plan_rows', 'planning_change_history']
+const rpcs = new Set(['stock_receive', 'stock_issue', 'stock_return', 'stock_release_return', 'stock_preview_issue',
+  'planning_save_bom', 'planning_save_schedule', 'planning_issue_plan'])
 const quote = value => `"${value.replaceAll('"', '""')}"`
 
 export async function createInventoryFixture(port = 0) {
@@ -24,7 +28,7 @@ export async function createInventoryFixture(port = 0) {
     grant usage on schema public, auth to anon, authenticated;
     grant execute on function auth.uid() to anon, authenticated;
   `)
-  for (const name of ['20261029000100_identity_foundation.sql', '20261030000100_inventory_foundation.sql']) {
+  for (const name of ['20261029000100_identity_foundation.sql', '20261030000100_inventory_foundation.sql', '20261030000200_stock_transactions.sql', '20261030000300_cleaning_fifo.sql', '20261030000400_bom_planning.sql']) {
     await db.exec(await readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8'))
   }
   for (const [index, role] of ['viewer', 'operator', 'admin', 'inactive'].entries()) {
@@ -51,6 +55,21 @@ export async function createInventoryFixture(port = 0) {
     async handleRest({ request, response, url, body, identity, reply }) {
       if (!identity) return reply(401, { code: '42501', message: 'Not authenticated' })
       const table = url.pathname.slice('/rest/v1/'.length)
+      if (table.startsWith('rpc/') && request.method === 'POST' && rpcs.has(table.slice(4))) {
+        try {
+          const result = await db.transaction(async (tx) => {
+            await tx.exec('set local role authenticated')
+            await tx.query("select set_config('request.jwt.claim.sub', $1, true)", [identity.id])
+            const result = await tx.query(`select public.${quote(table.slice(4))}($1::jsonb) as value`, [JSON.stringify(body.p_input)])
+            return result.rows[0].value
+          })
+          return reply(200, result)
+        }
+        catch (error) {
+          errors.push({ code: error.code, message: error.message })
+          return reply(error.code === '42501' ? 403 : 400, { code: error.code ?? 'FIXTURE', message: error.message, details: error.detail ?? '' })
+        }
+      }
       const allowed = columns.get(table)
       if (!allowed) return reply(404, { message: 'Unknown fixture resource' })
       const params = []
@@ -68,6 +87,9 @@ export async function createInventoryFixture(port = 0) {
           const operand = value.slice(separator + 1)
           const column = checkColumn(key)
           if (operator === 'eq') filters.push(`${column} = ${parameter(operand)}`)
+          else if (operator === 'gt') filters.push(`${column} > ${parameter(operand)}`)
+          else if (operator === 'gte') filters.push(`${column} >= ${parameter(operand)}`)
+          else if (operator === 'lte') filters.push(`${column} <= ${parameter(operand)}`)
           else if (operator === 'ilike') filters.push(`${column} ilike ${parameter(operand.replaceAll('*', '%'))}`)
           else if (operator === 'is' && operand === 'null') filters.push(`${column} is null`)
           else throw new Error(`Unsupported fixture filter ${operator}`)

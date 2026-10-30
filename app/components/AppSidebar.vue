@@ -14,10 +14,12 @@ const menuGroups = [
     { label: '창고 · 보관위치', icon: 'i-lucide-warehouse', to: '/warehouses' },
   ] },
   { label: '재고 업무', items: [
-    { label: '입고 관리', icon: 'i-lucide-package-plus', to: null },
-    { label: '불출 관리', icon: 'i-lucide-package-minus', to: null },
-    { label: '반납 관리', icon: 'i-lucide-undo-2', to: null },
-    { label: '입출고 이력', icon: 'i-lucide-history', to: null },
+    { label: 'BOM 관리', icon: 'i-lucide-list-tree', to: '/boms' },
+    { label: '생산일정 · 예정 불출', icon: 'i-lucide-calendar-days', to: '/production' },
+    { label: '입고 관리', icon: 'i-lucide-package-plus', to: '/receipts' },
+    { label: '불출 관리', icon: 'i-lucide-package-minus', to: '/issues' },
+    { label: '반납 관리', icon: 'i-lucide-undo-2', to: '/returns' },
+    { label: '시험번호별 원장', icon: 'i-lucide-history', to: '/transactions' },
   ] },
   { label: '분석 및 관리', items: [
     { label: 'AI 분석', icon: 'i-lucide-sparkles', to: null },
@@ -34,7 +36,7 @@ const menuGroups = [
     <div class="mx-5 mb-5 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
       <span class="size-1.5 rounded-full bg-blue-500" />
       <span class="text-xs font-medium text-slate-600">개발 워크스페이스</span>
-      <span class="ml-auto text-[10px] font-semibold tracking-wide text-slate-400">V0.2</span>
+      <span class="ml-auto text-[10px] font-semibold tracking-wide text-slate-400">V0.3</span>
     </div>
     <nav aria-label="주 메뉴" class="flex-1 space-y-6 overflow-y-auto px-3">
       <div v-for="group in menuGroups" :key="group.label">
@@ -59,6 +61,6 @@ const menuGroups = [
       <div class="mb-2 flex items-center gap-2 text-xs font-semibold text-blue-700"><UIcon name="i-lucide-shield-check" class="size-4" />안전한 개발 환경</div>
       <p class="text-[11px] leading-relaxed text-slate-500">가상 데이터로 검증하는 공간입니다.<br>실제 회사 정보는 사용하지 마세요.</p>
     </div>
-    <div class="border-t border-slate-100 px-6 py-4 text-[10px] text-slate-400">Warehouse AI · Phase 2</div>
+    <div class="border-t border-slate-100 px-6 py-4 text-[10px] text-slate-400">Warehouse AI · 원료 재고관리</div>
   </aside>
 </template>
