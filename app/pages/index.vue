@@ -11,8 +11,8 @@ const updatedLabel = ref('방금 확인')
 const { data: dashboard, error: dashboardError, refresh } = await useAsyncData('dashboard', () => fetchWithSession<DashboardResponse>('/api/dashboard'))
 
 const stats = [
-  { label: '등록 원료', icon: 'i-lucide-flask-conical', unit: '개', description: '원료 마스터 연결 후 제공', tone: 'blue' as const },
-  { label: '전체 LOT', icon: 'i-lucide-boxes', unit: '개', description: '제조번호 관리 연결 후 제공', tone: 'blue' as const },
+  { label: '등록 원료', icon: 'i-lucide-flask-conical', unit: '개', description: '대시보드 통계 연결 예정', tone: 'blue' as const },
+  { label: '전체 LOT', icon: 'i-lucide-boxes', unit: '개', description: '대시보드 통계 연결 예정', tone: 'blue' as const },
   { label: '재고 부족 원료', icon: 'i-lucide-chart-no-axes-column-decreasing', unit: '개', description: '최소재고 기준 집계 예정', tone: 'amber' as const },
   { label: '재시험 예정', icon: 'i-lucide-calendar-clock', unit: '개', description: '재시험일 기준 집계 예정', tone: 'amber' as const },
 ]
@@ -43,7 +43,7 @@ async function refreshDashboard() {
   <div class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <div class="mb-2 flex items-center gap-2"><p class="text-[10px] font-semibold tracking-[.18em] text-slate-400">WORKSPACE OVERVIEW</p><span class="rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-blue-600">PHASE 1</span></div>
+        <div class="mb-2 flex items-center gap-2"><p class="text-[10px] font-semibold tracking-[.18em] text-slate-400">WORKSPACE OVERVIEW</p><span class="rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-blue-600">PHASE 2</span></div>
         <h1 class="text-[27px] font-bold tracking-tight text-slate-900">대시보드</h1>
         <p class="mt-2 text-xs text-slate-500">{{ user?.displayName }}님, 안녕하세요. 원료·자재 관리 워크스페이스입니다.</p>
       </div>
@@ -57,8 +57,14 @@ async function refreshDashboard() {
 
     <div class="flex flex-col gap-3 rounded-xl border border-blue-100 bg-[#edf4ff] px-5 py-4 sm:flex-row sm:items-center sm:gap-4">
       <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600"><UIcon name="i-lucide-panel-top" class="size-5" /></span>
-      <div class="flex-1"><p class="text-xs font-semibold text-blue-900">워크스페이스의 기본 준비가 완료되었습니다</p><p class="mt-1 text-[11px] leading-5 text-blue-700/70">현재 로그인과 권한 관리 기반을 제공합니다. 재고 업무와 통계는 다음 개발 단계에서 연결됩니다.</p></div>
-      <span class="self-start rounded-full border border-blue-200 bg-white/70 px-2.5 py-1 text-[10px] font-medium text-blue-700 sm:self-center">프로젝트 기반 구축</span>
+      <div class="flex-1"><p class="text-xs font-semibold text-blue-900">원료와 제조번호별 재고를 확인하세요</p><p class="mt-1 text-[11px] leading-5 text-blue-700/70">원료·LOT·입고건과 창고를 관리하고, 품질상태·재시험일·보관위치로 재고를 검색할 수 있습니다.</p></div>
+      <UButton to="/inventory" size="sm" trailing-icon="i-lucide-arrow-right">재고 조회</UButton>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-3">
+      <NuxtLink to="/materials" class="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-blue-300"><UIcon name="i-lucide-flask-conical" class="size-5 text-blue-600" /><h2 class="mt-3 text-sm font-semibold text-slate-800">원료 · LOT 관리</h2><p class="mt-2 text-xs leading-5 text-slate-500">원료 검색, 제조번호와 입고건별 시험정보 확인</p></NuxtLink>
+      <NuxtLink to="/inventory" class="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-blue-300"><UIcon name="i-lucide-boxes" class="size-5 text-blue-600" /><h2 class="mt-3 text-sm font-semibold text-slate-800">재고 조회</h2><p class="mt-2 text-xs leading-5 text-slate-500">원료 합계와 LOT·위치별 현재고 및 가용재고 확인</p></NuxtLink>
+      <NuxtLink to="/warehouses" class="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-blue-300"><UIcon name="i-lucide-warehouse" class="size-5 text-blue-600" /><h2 class="mt-3 text-sm font-semibold text-slate-800">창고 · 보관위치</h2><p class="mt-2 text-xs leading-5 text-slate-500">창고와 세부 위치 기준정보 확인</p></NuxtLink>
     </div>
 
     <section aria-label="재고 요약 준비 화면" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -1,6 +1,6 @@
 # Supabase Cloud → Self-hosted 이전 준비
 
-Phase 1은 표준 PostgreSQL 테이블·RLS·트리거와 Supabase Auth/JS SDK만 사용한다. Edge Functions, Cloud 프로젝트 ID, Storage, 외부 AI 서비스에 의존하지 않는다. 이 문서는 이전 설계 가이드이며 실제 이전을 수행한 기록은 아니다.
+Phase 1·2는 표준 PostgreSQL 테이블·RLS·트리거·조회 뷰와 Supabase Auth/JS SDK만 사용한다. Edge Functions, Cloud 프로젝트 ID, Storage, 외부 AI 서비스에 의존하지 않는다. 이 문서는 이전 설계 가이드이며 실제 이전을 수행한 기록은 아니다. `security_invoker` 조회 뷰를 위해 PostgreSQL 15 이상이 필요하다.
 
 1. 호환되는 PostgreSQL과 Supabase Auth/PostgREST 버전의 Self-hosted 환경을 준비한다. DB 마이그레이션 실행용 관리 계정과 앱용 Publishable/legacy anon 키를 구분한다.
 2. 원본 DB·Auth 설정을 백업하고 복구 시험을 수행한다. 새 환경의 `auth` 스키마는 Supabase가 관리한다. 애플리케이션 migration만으로 Auth 서비스 전체를 설치하지 않는다.
@@ -10,4 +10,6 @@ Phase 1은 표준 PostgreSQL 테이블·RLS·트리거와 Supabase Auth/JS SDK�
 6. HTTPS와 reverse proxy를 구성하고 앱을 재시작한다. Proxy는 외부 요청의 `Host`를 보존하고 `X-Forwarded-Proto: https`를 설정해야 로그인·로그아웃 API의 같은 출처 검사가 일치한다. 클라이언트가 보낸 forwarded 헤더는 proxy에서 덮어쓰고 앱 포트는 proxy 뒤에 둔다. 운영 세션 쿠키가 Secure로 전달되는지 확인한다. 서명 키를 변경했다면 기존 로그인 세션이 유지된다고 가정하지 않고 재로그인을 안내한다.
 7. Viewer/Operator/Admin 가상 계정으로 로그인, 새로고침, 로그아웃, 미인증 접근, 비활성 계정 차단, 직접 DB 권한 상승 차단을 확인한다. 백업·복구, 보안 업데이트, 모니터링 운영 절차를 정한다.
 
-향후 원료·LOT·재고·Storage 기능이 생기면 이 문서에 파일 이전, 단위/수량 대사, 재고 변동 이력 대조, 동시 불출 테스트를 추가한다. 현재 Phase 1에는 해당 데이터와 기능이 없다.
+Phase 2 이전 시 원료코드·LOT·입고건·시험 이력의 UUID 관계와 건수를 대조한다. 원료별 기본단위 및 위치별 현재고·예약량을 비교하고, 같은 Seoul 기준일에서 두 조회 뷰의 가용/사용불가 재고를 대사한다. 품질 이력의 처리자 UUID를 보존하고 앱 역할의 잔고 직접 수정 차단도 재검증한다. 운영 데이터 복구에는 가상 seed를 섞지 않는다.
+
+Storage 파일 이전과 거래 이력 대사·동시 불출 검증은 해당 기능 구현 이후 추가한다.

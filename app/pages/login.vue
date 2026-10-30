@@ -49,7 +49,7 @@ async function checkConnection() {
           <div class="flex items-center gap-3"><span class="flex size-8 items-center justify-center rounded-lg border border-white/10 bg-white/5"><UIcon name="i-lucide-network" class="size-4 text-blue-300" /></span><span class="text-xs text-slate-300">단계적으로 확장하는 관리 시스템</span></div>
         </div>
       </div>
-      <div class="relative flex items-center justify-between border-t border-white/10 pt-6 text-[10px] text-slate-500"><span>WAREHOUSE AI</span><span>Phase 1 · Foundation</span></div>
+      <div class="relative flex items-center justify-between border-t border-white/10 pt-6 text-[10px] text-slate-500"><span>WAREHOUSE AI</span><span>Phase 2 · Inventory</span></div>
     </section>
 
     <main class="flex min-h-screen flex-1 flex-col items-center justify-center px-6 py-12 sm:px-12">

@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createError, deleteCookie, parseCookies, setCookie, setResponseHeaders, type H3Event } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import type { Database } from '../../shared/types/database'
@@ -25,7 +26,9 @@ export function clearAuthCookies(event: H3Event): void {
   }
 }
 
-export function createSupabaseServerClient(event: H3Event) {
+export function createSupabaseServerClient(event: H3Event): SupabaseClient<Database> {
+  const existing = event.context.warehouseSupabase as SupabaseClient<Database> | undefined
+  if (existing) return existing
   const { url, publishableKey, configured } = getSupabaseConfiguration(event)
 
   let validUrl = false
@@ -45,7 +48,7 @@ export function createSupabaseServerClient(event: H3Event) {
   // A new client per request prevents one user's session from leaking into another request.
   const requestCookies = parseCookies(event)
 
-  return createServerClient<Database>(url, publishableKey, {
+  const client = createServerClient<Database>(url, publishableKey, {
     global: {
       fetch(input, init) {
         const timeout = AbortSignal.timeout(8000)
@@ -81,6 +84,10 @@ export function createSupabaseServerClient(event: H3Event) {
       },
     },
   })
+  // Auth validation may refresh the session. Reuse that client for this request's
+  // queries so they cannot accidentally read the stale incoming cookie again.
+  event.context.warehouseSupabase = client
+  return client
 }
 
 export type SupabaseServerClient = ReturnType<typeof createSupabaseServerClient>

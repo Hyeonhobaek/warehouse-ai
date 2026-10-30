@@ -1,6 +1,6 @@
 {
   "name": "warehouse-ai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",
@@ -16,7 +16,7 @@
     "typecheck": "nuxt typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "node --test tests/integration/auth.test.mjs"
+    "test:integration": "node --test tests/integration/*.test.mjs"
   },
   "dependencies": {
     "@iconify-json/lucide": "1.2.149",

@@ -1,8 +1,8 @@
-# Warehouse AI — Phase 1
+# Warehouse AI — Phase 2
 
-제약회사 원료·자재 재고관리 시스템의 기반 프로젝트입니다. **현재 구현 범위는 Phase 1**이며, Nuxt 4 한 프로젝트에서 화면과 Server API를 실행합니다.
+제약회사 원료·자재 재고관리 시스템입니다. **현재 구현 범위는 Phase 1~2**이며, Nuxt 4 한 프로젝트에서 화면과 Server API를 실행합니다.
 
-> 저장소의 기획서 파일명은 `PRD.md`가 아니라 [`PRO.md`](./PRO.md)입니다. 해당 파일의 10장 Phase 1을 기준으로 구현했습니다. 원본 기획서는 변경하지 않았습니다.
+> 원본 기획서는 [`PRO.md`](./PRO.md)입니다. Phase 2에는 참고 엑셀에서 확인한 원료 별칭, 제조 LOT와 입고건·시험번호 구분을 반영했습니다. 원본 엑셀과 실제 회사 데이터는 저장소·seed에 포함하지 않습니다.
 
 ## 구현 범위
 
@@ -13,12 +13,18 @@
 - Viewer / Operator / Admin 권한 정의, 서버 검증, PostgreSQL RLS
 - 사용자 프로필 자동 생성 및 권한·활성 상태 변경 감사 기록
 - 환경변수, SQL migration, 자동 테스트, Cloud → Self-hosted 이전 문서
+- 원료 등록·검색·수정, 미참조 원료 삭제 및 사용 중지, 별칭·포장규격·밀도 관리
+- 원료별 제조 LOT, 실제 입고건의 시험번호·기한·품질정보 및 변경 이력
+- 창고·보관위치 등록·수정·사용상태 관리
+- 원료 합계와 LOT·입고건·위치별 재고 조회, 검색·필터·페이지네이션
+- 현재고·예약·가용·사용불가 구분, 부족·재시험·기한 임박 표시, 원료/상세재고 CSV 다운로드
+- 재실행 시 기존 데이터를 덮어쓰지 않는 가상 업무 seed
 
-원료 CRUD, LOT·창고·재고 조회, 입고·불출·반납, 재고 RPC, 통계 및 AI 분석은 **구현하지 않았습니다**. 관련 메뉴는 `준비 중`, 대시보드 수치는 `—`로 표시됩니다. Phase 1에는 재고를 변경하는 코드가 없습니다. 향후 재고 변경은 PostgreSQL RPC 트랜잭션에서 검증·잠금·이력 기록을 함께 처리해야 합니다.
+실제 입고·불출·반납에 따른 재고 변경은 **Phase 3**, 대시보드 통계·알림·AI 분석은 **Phase 4**입니다. Phase 2의 입고건 등록은 기초정보만 생성하며 수량을 증가시키지 않습니다. 조회용 재고는 가상 seed로 준비합니다. 원본 Excel/XLSM 자동 가져오기와 원료 CSV 업로드는 이번 범위에 포함하지 않습니다. 재시험 이월·계획 행·단위 혼용에 대한 변환·대사 규칙을 정한 후 별도 구현합니다.
 
 ## 1. 개발 환경
 
-- Node.js **24 LTS, 24.15 이상** (검증 버전: 24.22.1)
+- Node.js **24 LTS, 24.15 이상** (Phase 2 검증 버전: 24.15.0)
 - pnpm **11.25.0** (`packageManager`에 고정)
 - Supabase Cloud 테스트 프로젝트
 - Windows PowerShell 또는 일반 터미널
@@ -57,7 +63,14 @@ pnpm dlx supabase link --project-ref YOUR_PROJECT_REF
 pnpm dlx supabase db push
 ```
 
-적용 파일은 `supabase/migrations/20261029000100_identity_foundation.sql`입니다. `profiles`, `profile_role_audit`, 프로필 생성·감사 트리거, RLS 정책 및 권한을 만듭니다. 기존 Auth 사용자도 Viewer로 안전하게 연결합니다. 업무 재고 테이블은 만들지 않습니다.
+순서대로 적용할 파일은 다음과 같습니다.
+
+1. `supabase/migrations/20261029000100_identity_foundation.sql`: 인증·프로필·역할 감사 기반
+2. `supabase/migrations/20261030000100_inventory_foundation.sql`: 원료·LOT·입고건·품질 이력·창고·위치·재고 및 RLS/조회 뷰
+
+Phase 1을 이미 적용했다면 두 번째 migration만 추가합니다. CLI를 사용하지 않는 테스트 프로젝트에서는 Supabase SQL Editor에서 아직 적용하지 않은 파일의 SQL을 실행할 수 있습니다. 이 경우 추후 CLI 전환 시 migration 이력을 맞춰야 합니다.
+
+그다음 **가상 데이터 전용 프로젝트**의 SQL Editor에서 `supabase/seed.sql`을 실행합니다. `db push`는 seed를 자동 실행하지 않습니다. seed는 원료 6개, LOT 6개, 입고건 8개와 창고·위치·재고를 추가하며, Auth 사용자나 비밀번호를 만들지 않습니다. 재실행해도 기존 행과 수량을 덮어쓰지 않습니다. 상대 날짜는 최초 실행일을 기준으로 생성됩니다.
 
 ### 테스트 사용자 생성
 
@@ -88,9 +101,11 @@ pnpm dev
 
 1. `/` 접근 시 로그인 화면으로 이동합니다.
 2. Supabase에 생성한 테스트 계정으로 로그인합니다.
-3. 대시보드에서 사용자명·역할, 기본 현황 카드와 준비 중 메뉴를 확인합니다.
-4. 브라우저를 새로고침해 세션 유지를 확인합니다.
-5. 상단 로그아웃을 누른 후 `/` 재접근이 차단되는지 확인합니다.
+3. `/materials`에서 원료를 검색하고 상세 화면에서 LOT·입고건·품질 이력을 확인합니다. Admin은 등록·수정할 수 있습니다.
+4. `/inventory`에서 원료 합계/상세재고, 품질·창고·위치·재시험·부족 필터와 CSV 다운로드를 확인합니다.
+5. `/warehouses`에서 창고와 보관위치를 확인합니다. Admin은 등록·수정·사용 중지할 수 있습니다.
+6. 검색 후 새로고침·뒤로 가기로 URL 필터 상태와 세션 유지를 확인합니다.
+7. 상단 로그아웃을 누른 후 보호 페이지 재접근이 차단되는지 확인합니다.
 
 Supabase 환경변수 없이도 개발 서버와 로그인 화면을 열 수 있습니다. 설정 안내가 표시되고 로그인은 비활성화됩니다. **인증을 우회하는 데모 로그인은 없습니다.**
 
@@ -103,7 +118,7 @@ pnpm preview
 
 실제 배포에서는 환경변수를 서버에 설정하고 `node .output/server/index.mjs`로 실행합니다. 이 명령은 `.env`를 자동으로 읽지 않으므로 배포 환경에서 직접 주입해야 합니다. 운영은 HTTPS가 필요하며 세션 쿠키는 `HttpOnly`, `SameSite=Lax`, 운영 빌드에서 `Secure`입니다. 로컬 HTTP 화면 확인에는 `pnpm dev`를 사용하세요.
 
-리버스 프록시를 사용한다면 신뢰 가능한 프록시에서만 원래 Host·HTTPS 프로토콜을 전달하고, 외부에서 임의의 전달 헤더를 주입하지 못하게 구성하세요. 쿠키를 사용하는 페이지/API를 CDN·프록시에 캐시하지 마세요. POST API는 같은 Origin을 요구합니다.
+리버스 프록시를 사용한다면 신뢰 가능한 프록시에서만 원래 Host·HTTPS 프로토콜을 전달하고, 외부에서 임의의 전달 헤더를 주입하지 못하게 구성하세요. 쿠키를 사용하는 페이지/API를 CDN·프록시에 캐시하지 마세요. POST/PATCH/DELETE API는 같은 Origin을 요구합니다.
 
 ## 4. 테스트
 
@@ -114,13 +129,13 @@ pnpm build
 pnpm test:integration
 ```
 
-- **단위 테스트:** Zod 입력 검증, 역할별 권한 경계
-- **DB 테스트:** PGlite PostgreSQL 엔진에 실제 migration 적용, 익명 접근 차단, 본인/관리자 조회 범위, 권한 상승 차단, 비활성 계정, 변경 감사 기록
-- **HTTP 통합 테스트:** 빌드된 Nuxt 서버를 실행해 로그인·대시보드·SSR 새로고침·토큰 갱신·로그아웃·CSRF·외부 인증 장애를 확인
+- **단위 테스트:** Zod 날짜·수량·식별자·필터 검증, CSV 처리, 역할별 권한 경계
+- **DB 테스트:** PGlite PostgreSQL에 실제 migration/seed 적용, RLS·관리자 변경 범위·재고 직접 수정 차단·품질 이력·재고 집계·seed 재실행 검증
+- **HTTP 통합 테스트:** 빌드된 Nuxt 서버와 Supabase JS/SSR 클라이언트로 로그인·세션 갱신·CRUD·재고 필터·품질 이력·CSV·CSRF·SSR을 확인
 
-통합 테스트는 `tests/fixtures/supabase.mjs`의 **테스트 전용 외부 서비스 모형**을 사용합니다. 실제 Nuxt API와 Supabase JS/SSR 클라이언트는 그대로 실행하며, 운영 코드에 테스트 우회 분기를 넣지 않았습니다. 이 검증은 실제 Supabase Cloud 접속 테스트를 대신하지 않으므로, 프로젝트 설정 후 위 수동 시나리오도 수행하세요. 테스트에는 실회사 정보가 없습니다.
+통합 테스트는 `tests/fixtures/supabase.mjs`의 Auth 서비스 모형과 `tests/fixtures/inventory.mjs`의 **실제 migration을 실행하는 PGlite 기반 PostgREST 모형**을 사용합니다. 실제 Nuxt API와 Supabase JS/SSR 클라이언트는 그대로 실행하며, 운영 코드에는 테스트 우회 분기가 없습니다. 실제 Supabase Cloud의 Auth/PostgREST 접속 검증을 대신하지 않으므로 프로젝트 설정 후 위 수동 시나리오도 수행하세요. 모든 테스트 데이터는 가상입니다.
 
-선택적으로 Docker와 Supabase CLI가 있다면 `pnpm dlx supabase start`, `pnpm dlx supabase db reset`으로 로컬 Supabase에도 migration을 적용할 수 있습니다. `db reset`은 **로컬 개발 DB를 초기화**하므로 필요한 데이터를 먼저 보존하세요. `supabase status`에서 받은 로컬 URL/anon 키를 `.env`에 설정합니다. `seed.sql`은 의도적으로 사용자나 업무 데이터를 삽입하지 않습니다.
+선택적으로 Docker와 Supabase CLI가 있다면 `pnpm dlx supabase start`, `pnpm dlx supabase db reset`으로 로컬 Supabase에 migration과 가상 seed를 적용할 수 있습니다. `db reset`은 **로컬 개발 DB를 초기화**하므로 필요한 데이터를 먼저 보존하세요. `supabase status`에서 받은 로컬 URL/anon 키를 `.env`에 설정합니다. 테스트용 Auth 사용자는 별도로 생성합니다.
 
 ## 5. 주요 파일
 
@@ -131,20 +146,20 @@ app/
   composables/           인증 상태와 API 호출
   layouts/               공통 관리자 레이아웃
   middleware/            페이지 인증 가드
-  pages/                 로그인·기본 대시보드
+  pages/                 로그인·대시보드·원료/LOT·재고·창고 화면
 server/
   api/auth/              session, login, logout
-  api/dashboard.get.ts   인증을 요구하는 Phase 1 기본 응답
+  api/                   원료·LOT·입고건·창고·재고 및 CSV API
   services/auth.ts       사용자·활성 프로필·권한 검증
   utils/                 Supabase 서버 클라이언트·쿠키·Origin 검증
 shared/
-  schemas/auth.ts        Zod 로그인 검증
+  schemas/               Zod 로그인·업무 입력·검색 조건 검증
   types/                 인증·DB·대시보드 타입
   utils/permissions.ts   역할별 권한 정의
 supabase/
   migrations/            DB 스키마·RLS·함수·트리거
   config.toml            선택적 로컬 Supabase 설정
-  seed.sql               Phase 1 가상 데이터 정책 안내
+  seed.sql               Phase 2 가상 원료·입고건·위치별 재고
 tests/                   단위·DB·HTTP 통합 테스트
 docs/                    구조·DB·Self-hosted 이전 안내
 .env.example             서버 환경변수 예시
@@ -156,12 +171,12 @@ pnpm-lock.yaml           재현 가능한 의존성 버전
 
 - Supabase Cloud 연결, migration 적용, 가상 계정별 로그인 확인
 - 초기 Admin 계정 및 계정 발급·비활성화 담당자 결정
-- Phase 2에서 원료·LOT·창고 스키마와 RLS를 새 migration으로 추가
+- 원료코드·약어, 입고건과 시험번호, 기본단위 및 환산 기준을 실제 운영 규칙과 대조
 - Phase 3에서 PostgreSQL RPC·행 잠금·원자적 재고 변경·거래 이력 구현
 - 실제 업무 적용 전 별도 검증·승인, 백업/복구 및 운영 정책 수립
 
 이 프로젝트는 PRD상 시범 개발 단계이며, 승인된 GMP 운영 시스템이 아닙니다.
 
-관련 문서: [아키텍처](./docs/ARCHITECTURE.md) · [데이터베이스](./docs/DATABASE.md) · [Self-hosted 이전](./docs/MIGRATION.md).
+관련 문서: [Phase 2 검증 기록](./docs/PHASE2-VALIDATION.md) · [아키텍처](./docs/ARCHITECTURE.md) · [데이터베이스](./docs/DATABASE.md) · [Self-hosted 이전](./docs/MIGRATION.md).
 
 구현 참고: [Nuxt UI 공식 설치 안내](https://nuxt.com/modules/ui), [Supabase 서버 클라이언트](https://supabase.com/docs/guides/auth/server-side/creating-a-client), [Supabase SSR 세션·캐시 안내](https://supabase.com/docs/guides/auth/server-side/advanced-guide).

@@ -49,7 +49,13 @@ export function useAuth() {
       }
       event.context.warehouseAuthCookie = [...cookies.entries()].map(([name, value]) => `${name}=${value}`).join('; ')
     }
-    if (!response.ok) throw createError({ statusCode: response.status, statusMessage: 'Authentication request failed' })
+    if (!response.ok) {
+      const failure = response._data as { message?: unknown; data?: unknown } | undefined
+      throw createError({
+        statusCode: response.status,
+        message: typeof failure?.message === 'string' ? failure.message : '요청을 처리하지 못했습니다. 다시 시도해 주세요.',
+      })
+    }
     return response._data as T
   }
 

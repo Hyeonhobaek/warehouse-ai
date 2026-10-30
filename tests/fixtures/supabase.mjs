@@ -13,7 +13,7 @@ const identities = ['viewer', 'operator', 'admin', 'inactive'].map((role, index)
   is_active: role !== 'inactive',
 }))
 
-export async function createSupabaseFixture(port = 0) {
+export async function createSupabaseFixture(port = 0, options = {}) {
   const sessions = new Map()
   const refreshTokens = new Map()
   const state = { unavailable: false, refreshCount: 0 }
@@ -72,6 +72,9 @@ export async function createSupabaseFixture(port = 0) {
       const singular = request.headers.accept?.includes('application/vnd.pgrst.object+json')
       if (singular && !profile) return reply(406, { code: 'PGRST116', message: 'No rows', details: 'The result contains 0 rows' })
       return reply(200, singular ? profile : profile ? [profile] : [])
+    }
+    if (url.pathname.startsWith('/rest/v1/') && options.handleRest) {
+      return options.handleRest({ request, response, url, body, identity, reply })
     }
     return reply(404, { message: `Fixture does not implement ${url.pathname}` })
   })

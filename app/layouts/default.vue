@@ -6,6 +6,14 @@ const mobileMenuOpen = ref(false)
 const loggingOut = ref(false)
 const logoutError = ref<string | null>(null)
 const initial = computed(() => user.value?.displayName.slice(0, 1) || 'U')
+const route = useRoute()
+const pageTitle = computed(() => {
+  if (route.path.startsWith('/materials/')) return '원료 상세 · LOT 관리'
+  if (route.path === '/materials') return '원료 관리'
+  if (route.path === '/inventory') return '재고 조회'
+  if (route.path === '/warehouses') return '창고 · 보관위치'
+  return '대시보드'
+})
 
 async function handleLogout() {
   loggingOut.value = true
@@ -39,7 +47,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <div class="flex items-center gap-2 text-xs text-slate-400">
             <span class="hidden sm:inline">워크스페이스</span>
             <UIcon name="i-lucide-chevron-right" class="hidden size-3 sm:block" />
-            <span class="font-medium text-slate-700">대시보드</span>
+            <span class="font-medium text-slate-700">{{ pageTitle }}</span>
           </div>
         </div>
         <div class="flex items-center gap-3 sm:gap-5">

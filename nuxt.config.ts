@@ -23,6 +23,10 @@ export default defineNuxtConfig({
   routeRules: {
     '/': { headers: { 'cache-control': 'private, no-store' } },
     '/login': { headers: { 'cache-control': 'private, no-store' } },
+    '/materials': { headers: { 'cache-control': 'private, no-store' } },
+    '/materials/**': { headers: { 'cache-control': 'private, no-store' } },
+    '/inventory': { headers: { 'cache-control': 'private, no-store' } },
+    '/warehouses': { headers: { 'cache-control': 'private, no-store' } },
     '/api/**': { headers: { 'cache-control': 'private, no-store' } },
   },
 })
